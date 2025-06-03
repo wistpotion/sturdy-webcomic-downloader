@@ -155,16 +155,17 @@ export async function insertImage(pdf: PDFKit.PDFDocument, image: ArrayBuffer) {
         return
     }
 
+    
     pdf.addPage({size: [metadata.width, metadata.height]})
 
     //check if we can insert the image as is
     if ( metadata.format == "png" || metadata.format == "jpeg") {
-        pdf.image(image)
+        pdf.image(image, 0, 0)
 
     } else {
         //if no: convert the image to png
         const converted = await sharpImage.png().toBuffer()
-        pdf.image(converted)
+        pdf.image(converted, 0, 0)
     }
 }
 
@@ -181,6 +182,10 @@ export function insertPageForMissingImage(pdf: PDFKit.PDFDocument) {
 export interface ITraversePageOptions {
     headers?: Record<string, string>,
     maxPages?: number,
+}
+
+function verboseLog(val: unknown) {
+    console.log(val)
 }
 
 /**
@@ -201,6 +206,8 @@ export async function downloadWebcomic(
         maxPages: number,
         headers?: Record<string, string>){
 
+    console.log("Starting download!")
+
     //loop until next page button isn't found OR max pages reached
     
     const base = startUrl.origin
@@ -209,6 +216,9 @@ export async function downloadWebcomic(
     
 
     for (let i = 0; i < (maxPages) ; i++) {
+        if (i % 30 == 0) {
+            console.log("Has downloaded " + i + " pages.")
+        }
 
         const requestInit: RequestInit = {
             headers
@@ -217,6 +227,7 @@ export async function downloadWebcomic(
         //get the queued page
         // console.log(queuedPage)
         const page = await getNextPage(queuedURL, requestInit)
+
     
         // //find the image in the page
         const imageURL = await findImageURL(page, imageQuerySelector, base)

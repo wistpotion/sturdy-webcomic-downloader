@@ -8,7 +8,7 @@
     "yargs": "npm:yargs@^18.0.0"
   }, 
   "tasks": {
-    "test": "deno test --allow-read --allow-net",
-    "start": "deno run --allow-read --allow-net --allow-env --allow-ffi main.ts"
+    "test": "deno test --allow-read --allow-net --allow-env --allow-ffi --allow-write",
+    "start": "deno run --allow-read --allow-net --allow-env --allow-ffi --allow-write main.ts"
   }
 }

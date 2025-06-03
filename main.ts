@@ -7,7 +7,7 @@ import pdfkit from "npm:pdfkit"
 //setup the cli stuff
 interface IArgs {
 	maxPages: number,
-	headers?: Record<string, string>
+	headers?: string[]
 	"_": [ firstPageUrl: string, imageQuerySelector: string, nextLinkQuerySelector: string, outputFile: string ]
 }
 
@@ -26,16 +26,33 @@ const args: IArgs = yargs(Deno.args)
 	
 .parse()
 
-const pdf = new pdfkit()
+console.log("===== running! =====")
+
 
 const firstPageURL = args["_"][0]
 const imageQuerySelector = args["_"][1]
 const nextLinkQuerySelector = args["_"][2]
 const outputFile = args["_"][3]
 
+const headers: Record<string, string> = {}
+
+if (args.headers) {
+	if (args.headers.length % 2 != 0) {
+		throw new Error("Uneven number of header arguments. Header arguments must come in pairs of two ('key' 'value' 'key' 'value')")
+	}
+	
+	for(let i = 0; i < args.headers.length; i += 2) {
+		headers[args.headers[i]] = args.headers[i+1]
+	}
+}
+
 //pipe to an out file
+const pdf = new pdfkit({autoFirstPage: false})
 pdf.pipe(fs.createWriteStream(outputFile))
 
-downloadWebcomic(pdf, new URL(firstPageURL), imageQuerySelector, nextLinkQuerySelector, args.maxPages, args.headers)
+
+await downloadWebcomic(pdf, new URL(firstPageURL), imageQuerySelector, nextLinkQuerySelector, args.maxPages, headers)
+
+console.log("===== done! =====")
 
 pdf.end()
