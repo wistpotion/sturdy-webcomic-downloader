@@ -1,0 +1,14 @@
+{
+  "imports": {
+    "@std/testing": "jsr:@std/testing@^1.0.13",
+    "@types/pdfkit": "npm:@types/pdfkit@^0.13.9",
+    "image-size": "npm:image-size@^2.0.2",
+    "pdfkit": "npm:pdfkit@^0.17.1",
+    "sharp": "npm:sharp@^0.34.2",
+    "yargs": "npm:yargs@^18.0.0"
+  }, 
+  "tasks": {
+    "test": "deno test --allow-read --allow-net",
+    "start": "deno run --allow-read --allow-net --allow-env --allow-ffi main.ts"
+  }
+}
