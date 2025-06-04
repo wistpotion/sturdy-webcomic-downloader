@@ -1,4 +1,4 @@
-# Sturdy Webcomic Downloader
+# Sturdy Webcomic Downloader (sturdywcdl)
 
 ## What does it do?
 ### Downloads webcomics in the very specific format

@@ -17,6 +17,7 @@ import { assertSpyCallArgs, assertSpyCalls, returnsNext, stub } from "@std/testi
 import { getImage, findImageURL, findNextPageURL, downloadWebcomic, getNextPage, insertImage, messages, insertPageForMissingImage, constructHttpErrorMsg } from "./downloader.ts"
 import * as denoDom from 'https://deno.land/x/deno_dom/deno-dom-wasm.ts'
 import { toReadableStream } from "https://deno.land/std/io/mod.ts";
+import * as canvasKit from "https://deno.land/x/canvas/mod.ts"
 
 
 

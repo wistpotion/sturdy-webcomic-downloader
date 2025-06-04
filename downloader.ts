@@ -7,8 +7,10 @@
  */
 
 
-import * as denoDom from 'https://deno.land/x/deno_dom/deno-dom-wasm.ts';
-import sharp from "npm:sharp"
+import * as denoDom from 'https://deno.land/x/deno_dom/deno-dom-wasm.ts'
+import * as canvasKit from "https://deno.land/x/canvas/mod.ts"
+import { imageSize } from "npm:image-size"
+
 
 // deno-lint-ignore no-unused-vars
 import pdfkit from "npm:pdfkit" //required for types
@@ -185,31 +187,41 @@ export async function getNextPage(url: URL, requestInit?: RequestInit): Promise<
  * @param pdf The pdf document to insert into.
  * @param image The image to insert into the pdf.
  */
-export async function insertImage(pdf: PDFKit.PDFDocument, image: ArrayBuffer) {
+export function insertImage(pdf: PDFKit.PDFDocument, image: ArrayBuffer) {
 
-    const sharpImage = sharp(image)
     let metadata
-
+    
     //attempt getting some data from the supposed image. if we can't, the buffer is probably not an image, or otherwise corrupt.
     try {
-        metadata = await sharpImage.metadata()
+        metadata = imageSize(new Uint8Array(image))
     } catch {
         console.warn(messages.warnMalformedImage)
         insertPageForMissingImage(pdf)
         return
     }
 
-    //add a page to the pdf in the same size as the image we got
+
+    // //add a page to the pdf in the same size as the image we got
     pdf.addPage({size: [metadata.width, metadata.height]})
 
-    //check if the current image format is supported by the pdf
-    if ( metadata.format == "png" || metadata.format == "jpeg") {
+    // //check if the current image format is supported by the pdf
+    if ( metadata.type == "png" || metadata.type == "jpg") {
         pdf.image(image, 0, 0)
 
     } else {
         //if no: convert the image to png
-        const converted = await sharpImage.png().toBuffer()
-        pdf.image(converted, 0, 0)
+        const canvas = canvasKit.createCanvas(metadata.width, metadata.height)
+        const ctx = canvas.getContext("2d")
+
+        const decoded = canvas.decodeImage(image)
+        ctx.drawImage(decoded, 0, 0)
+
+        const imageData = canvas.toBuffer("image/png")
+        const buffer = imageData.buffer as ArrayBuffer
+        
+        pdf.image(buffer, 0, 0)
+
+        canvas.dispose()
     }
 }
 

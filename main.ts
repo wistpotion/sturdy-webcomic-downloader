@@ -22,7 +22,7 @@ const args: IArgs = yargs(Deno.args)
 	.describe("headers", "Key value pairs that are sent along as headers with all http requests. Useful if a website requires authorization or other cookies.")
 	.number("maxPages")
 	.describe("maxPages", "Limits the amount of pages that can will be downloaded.")
-	.demandCommand(3)
+	.demandCommand(4)
 	
 .parse() //turn what the user wrote in the terminal into something readable
 
