@@ -3,7 +3,6 @@ import { downloadWebcomic } from "./downloader.ts";
 import * as fs from 'node:fs';
 import pdfkit from "npm:pdfkit"
 
-
 interface IArgs {
 	maxPages: number,
 	headers?: string[]
@@ -48,6 +47,12 @@ if (args.headers) {
 		headers[args.headers[i]] = args.headers[i+1]
 	}
 }
+
+//create output folder if it doesn't exist
+const lastIndexOfSlash = Math.max(outputFile.lastIndexOf("/"), outputFile.lastIndexOf("\\"))
+const outputDirectoryPath = outputFile.substring(0, lastIndexOfSlash)
+
+await Deno.mkdir(outputDirectoryPath, { recursive: true })
 
 //create pdf and pipe it to a file
 const pdf = new pdfkit({autoFirstPage: false})

@@ -56,25 +56,29 @@ export function findImageURL(document: denoDom.HTMLDocument, imageQuerySelector:
 
 
 /**
- * Get an image from a url.
- * @param url The url to download from.
- * @returns The image found. Throws if no image is found
+ * Construct an http error message to be displayed to the user
+ * @param status The http status number.
+ * @param helperText A text that helps explain to the user what went wrong, and how to fix it.
+ * @returns Constructed error message.
  */
-export async function getImage(url: URL, requestInit?: RequestInit): Promise<ArrayBuffer> {
+export function constructHttpErrorMsg(status: number, helperText: string) {
+    return "http " + status + ":" + helperText
+}
 
-    //this try catch handles all the odd error where fetch just throws. it usually does good just to try again once or twice.
-    let response
-    try {
-        response = await fetch(url, requestInit)
-    } catch {
-        throw new Error("fetch failed unexpectedly")
-    }
+
+/**
+ * A fetch that will give helpful error messages when things go wrong. See fetch for documentation.
+ * @param url 
+ * @param requestInit 
+ * @returns
+*/
+export async function helpfullyFailingFetch(url: URL, requestInit?: RequestInit): Promise<Response> {
+    //this function is tested by the tests for getImage and getNextPage
+    
+    const response = await fetch(url, requestInit)
     
     if (response.ok) {
-        //we got a buffer! return it
-        const image = response.arrayBuffer()
-    
-        return image
+        return response
 
     } else {
         //handle possible http errors, and try to be a bit helpful in how to solve them
@@ -102,6 +106,20 @@ export async function getImage(url: URL, requestInit?: RequestInit): Promise<Arr
 
 
 /**
+ * Get an image from a url.
+ * @param url The url to download from.
+ * @returns The image found. Throws if no image is found
+ */
+export async function getImage(url: URL, requestInit?: RequestInit): Promise<ArrayBuffer> {
+    const response = await helpfullyFailingFetch(url, requestInit)
+
+    const image = response.arrayBuffer()
+
+    return image
+}
+
+
+/**
  * Find the URL to the next page from the html document.
  * @param document The html document.
  * @param nextQuerySelector a css style selector for an anchor <a> element that takes you to the next page.
@@ -123,16 +141,6 @@ export function findNextPageURL(document: denoDom.HTMLDocument, nextQuerySelecto
 }
 
 
-/**
- * Construct an http error message to be displayed to the user
- * @param status The http status number.
- * @param helperText A text that helps explain to the user what went wrong, and how to fix it.
- * @returns Constructed error message.
- */
-export function constructHttpErrorMsg(status: number, helperText: string) {
-    return "http " + status + ":" + helperText
-}
-
 
 /**
  * Get the next page as an html document.
@@ -141,44 +149,14 @@ export function constructHttpErrorMsg(status: number, helperText: string) {
  * @returns Html document. Or it throws.
  */
 export async function getNextPage(url: URL, requestInit?: RequestInit): Promise<denoDom.HTMLDocument> {
+    const response = await helpfullyFailingFetch(url, requestInit)
 
-    //this try catch handles all the odd error where fetch just throws. it usually does good just to try again once or twice.
-    let response
-    try {
-        response = await fetch(url, requestInit)
-    } catch {
-        throw new Error("fetch failed unexpectedly")
-    }
-
-    if (response.ok) {
-        //we got a document! now we convert it to something that we can use for query selection, and return
-        const bodyText = await response.text()
-        
-        const doc = new denoDom.DOMParser().parseFromString(bodyText, "text/html")
+    //we got a document! now we convert it to something that we can use for query selection, and return
+    const bodyText = await response.text()
     
-        return doc
-    } else {
-        //handle possible http errors, and try to be a bit helpful in how to solve them
+    const doc = new denoDom.DOMParser().parseFromString(bodyText, "text/html")
 
-        switch (response.status) {
-            case 403:
-            case 401:
-            case 302:
-            case 303:
-            case 307:
-                throw new Error(constructHttpErrorMsg(response.status, messages.errorFetchAuthlike))
-
-            case 503:
-            case 500:
-                throw new Error(constructHttpErrorMsg(response.status, messages.errorFetchServerIssues))
-
-            case 404: 
-                throw new Error(constructHttpErrorMsg(response.status, messages.errorFetch404))            
-
-            default: 
-                throw new Error(constructHttpErrorMsg(response.status, messages.errorUnknown))
-        }
-    }
+    return doc
 }
 
 
@@ -268,7 +246,7 @@ export async function downloadWebcomic(
     for (let i = 0; i < (maxPages) ; i++) {
 
         //explain to the user that YES things are happening
-        if (i % 30 == 0 && i != 0) {
+        if (i % 15 == 0 && i != 0) {
             console.log("Has downloaded " + i + " pages.")
         }
 
