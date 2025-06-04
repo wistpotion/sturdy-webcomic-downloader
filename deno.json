@@ -9,6 +9,7 @@
   }, 
   "tasks": {
     "test": "deno test --allow-read --allow-net --allow-env --allow-ffi --allow-write",
-    "start": "deno run --allow-read --allow-net --allow-env --allow-ffi --allow-write main.ts"
+    "start": "deno run --allow-read --allow-net --allow-env --allow-ffi --allow-write main.ts",
+    "compile": "deno compile --allow-read --allow-net --allow-env --allow-ffi --allow-write"
   }
 }

@@ -1,21 +1,29 @@
-import { assertEquals, assertIsError, assertRejects, assertThrows } from "jsr:@std/assert"
-import { assertSpyCall, assertSpyCallArgs, assertSpyCalls, returnsNext, stub } from "@std/testing/mock"
+/**
+ * 
+ * 
+ * This file contains tests for the downloader. It's got twice the size of the downloader, and took a fair bit to write, but it saves a LOT of debugging time.
+ * 
+ * 
+ */
+
+
+
+// deno-lint-ignore-file no-unused-vars
+
+
+
+import { assertEquals, assertRejects } from "jsr:@std/assert"
+import { assertSpyCallArgs, assertSpyCalls, returnsNext, stub } from "@std/testing/mock"
 import { getImage, findImageURL, findNextPageURL, downloadWebcomic, getNextPage, insertImage, messages, insertPageForMissingImage, constructHttpErrorMsg } from "./downloader.ts"
 import * as denoDom from 'https://deno.land/x/deno_dom/deno-dom-wasm.ts'
-import pdfkit from "npm:pdfkit"
 import { toReadableStream } from "https://deno.land/std/io/mod.ts";
-import deno from "https://deno.land/x/y18n@v5.0.0-deno/lib/platform-shims/deno.ts";
-import test, { mock } from "node:test";
-import { buffer } from "node:stream/consumers";
-import { Buffer } from "node:buffer";
-// import { addPage } from "pdfkit";
 
 
 
 const mockPdf = { 
     addPage: () => { return mockPdf },
-    image: (src: any, options?: any) => { return mockPdf },
-    text: (text: string, options: any) => { return mockPdf },
+    image: (src: unknown, options?: unknown) => { return mockPdf },
+    text: (text: string, options: unknown) => { return mockPdf },
     end: () => {},
 } as PDFKit.PDFDocument //trust me bro
 
@@ -86,7 +94,7 @@ Deno.test({
 
 
 Deno.test({
-    name: "getImageStream fetch failed due to (most likely) auth error: throw",
+    name: "getImage fetch failed due to (most likely) auth error: throw",
     fn: async () => {
         const results: Promise<Response>[] = [
             Promise.resolve( new Response("", { status: 403 }) ),
@@ -128,7 +136,7 @@ Deno.test({
 
 
 Deno.test({
-    name: "getImageStream fetch failed due to (most likely) server issues: throw",
+    name: "getImage fetch failed due to (most likely) server issues: throw",
     fn: async () => {
         const results: Promise<Response>[] = [
             Promise.resolve( new Response("", { status: 500 }) ),
@@ -165,7 +173,7 @@ Deno.test({
     
 
 Deno.test({
-    name: "getImageStream fetch failed due to 404 error: throw",
+    name: "getImage fetch failed due to 404 error: throw",
     fn: async () => {
         const results: Promise<Response>[] = [
             Promise.resolve( new Response("", { status: 404 }) ),
@@ -200,7 +208,7 @@ Deno.test({
     
 
 Deno.test({
-    name: "getImageStream fetch failed due to unknown error: throw",
+    name: "getImage fetch failed due to unknown error: throw",
     fn: async () => {
         const results: Promise<Response>[] = [
             Promise.resolve( new Response("", { status: 511 }) ),
@@ -239,12 +247,12 @@ Deno.test({
     
 
 Deno.test({
-    name: "getImageStream ok: return stream",
+    name: "getImage ok: return stream",
     fn: async () => {
         const file = (await Deno.readFile("test/test.jpg")).buffer
 
         using stubFetch = stub(globalThis, "fetch", returnsNext([
-            new Promise((resolve, reject) => { resolve( new Response(file, { status: 200 }) ) })
+            Promise.resolve( new Response(file, { status: 200 }) )
         ]))
         
         assertEquals(
@@ -308,8 +316,8 @@ Deno.test({
     fn: async () => {
         using stubFetch = stub(globalThis, "fetch", (url) => {
             if (url.toString() == "https://test.com/") {
-                return new Promise((resolve, reject) => { resolve( new Response(
-                    "<html></html>", { status: 200 }) ) })
+                return Promise.resolve( new Response(
+                    "<html></html>", { status: 200 }) )
             }
 
             throw new Error("this path isn't mocked: " + url)
@@ -326,7 +334,7 @@ Deno.test({
 
 
 Deno.test({
-    name: "insertImageIntoPDF image requires conversion: convert to png and add page",
+    name: "insertImage image requires conversion: convert to png and add page",
     fn: async () => {
         //this can probably be done significantly better
         const buffer = new Response(toReadableStream(await Deno.open("test/test.gif"))).arrayBuffer()
@@ -344,7 +352,7 @@ Deno.test({
 
 
 Deno.test({
-    name: "insertImageIntoPDF image is malformed: insert empty and log",
+    name: "insertImage image is malformed: insert empty and log",
     fn: async () => {
         const buffer = await new Response(
                 toReadableStream(
@@ -368,7 +376,7 @@ Deno.test({
 
 
 Deno.test({
-    name: "insertImageIntoPDF ok",
+    name: "insertImage ok",
     fn: async () => {
         //horrifying piece of code, there is probably a better way to do this
         const buffer = await new Response(toReadableStream(await Deno.open("test/test.png"))).arrayBuffer()
@@ -378,12 +386,12 @@ Deno.test({
         
         await insertImage(mockPdf, buffer)
         
-        //insertImageIntoPDF ok: page size is equal to image size
+        //insertImage ok: page size is equal to image size
         const addPageArgs: PDFKit.PDFDocumentOptions = {
             size: [300, 500]
         }
         
-        //insertImageIntoPDF ok: page was added
+        //insertImage ok: page was added
         assertSpyCalls(stubAddPage, 1)
         assertSpyCallArgs(stubAddPage, 0, [addPageArgs])
         assertSpyCalls(stubImage, 1)
@@ -394,8 +402,8 @@ Deno.test({
 
 
 Deno.test({
-    name: "insertImageMissing ok: empty page was added",
-    fn: async () => {
+    name: "insertPageForMissingImage ok: empty page was added",
+    fn: () => {
         
         using stubAddPage = stub(mockPdf, "addPage")
 
@@ -437,8 +445,8 @@ Deno.test({
     fn: async () => {
         using stubFetch = stub(globalThis, "fetch", async (url) => {
             if (url.toString() == "https://test.com/") {
-                return new Promise((resolve, reject) => { resolve( new Response(
-                    "<html> <a>next</a> </html>", { status: 200 }) ) })
+                return Promise.resolve( new Response(
+                    "<html> <a>next</a> </html>", { status: 200 }) )
 
             } else if (url.toString() == "https://test.com/img/") {
                 const buffer = (await Deno.readFile("test/test.jpg")).buffer
@@ -462,7 +470,7 @@ Deno.test({
 
 
 Deno.test({
-    name: "downloadWebcomic getImageStream threw too many times: insert empty image and warn",
+    name: "downloadWebcomic getImage threw too many times: insert empty image and warn",
     fn: async () => {
         //also fulfills:
         //downloadWebcomic findNextPage returned null: stop, check amount of pages
@@ -471,26 +479,22 @@ Deno.test({
             switch (url.toString()) {
 
                 case "https://test.com/1":
-                    return new Promise((resolve, reject) => { resolve( new Response(
-                        "<html><img src='https://test.com/img1'><a id='next' href='/2'>next</a></html>", { status: 200 }) ) })
-                    break;
+                    return Promise.resolve( new Response(
+                        "<html><img src='https://test.com/img1'><a id='next' href='/2'>next</a></html>", { status: 200 }) )
 
                 case "https://test.com/2":
-                    return new Promise((resolve, reject) => { resolve( new Response(
-                        "<html><img src='https://test.com/img2'><a id='next' href='/3'>next</a></html>", { status: 200 }) ) })
-                    break;
+                    return Promise.resolve( new Response(
+                        "<html><img src='https://test.com/img2'><a id='next' href='/3'>next</a></html>", { status: 200 }) )
 
                 case "https://test.com/3":
-                    return new Promise((resolve, reject) => { resolve( new Response(
-                        "<html><img src='https://test.com/img3'></html>", { status: 200 }) ) })
-                    break;
+                    return Promise.resolve( new Response(
+                        "<html><img src='https://test.com/img3'></html>", { status: 200 }) )
                     
                 case "https://test.com/img1":
                     return new Promise((resolve, reject) => { 
                         Deno.readFile("test/test.gif").then((img) => {
                             resolve(new Response(null, { status: 500 }) )
                         })})
-                    break; 
 
                 case "https://test.com/img2":
                 case "https://test.com/img3":
@@ -498,11 +502,9 @@ Deno.test({
                         Deno.readFile("test/test.gif").then((img) => {
                             resolve(new Response(img, { status: 200 }) )
                         })})
-                    break;
 
                 default:
                     throw new Error("this path isn't mocked: " + url)
-                    break;
             }
         })
 
@@ -525,7 +527,7 @@ Deno.test({
     name: "downloadWebcomic only allowed with correct headers",
     fn: async () => {
             // throw new Error()
-        using stubFetch = stub(globalThis, "fetch", async (url, init) => {
+        using stubFetch = stub(globalThis, "fetch", (url, init) => {
             switch (url.toString()) {
 
                 case "https://test.com/1":
@@ -542,12 +544,11 @@ Deno.test({
                         }
                     }
 
-                    break;
 
                 case "https://test.com/img1":
                     {
                         const headers = init?.headers as Record<string, string>
-                        if (headers["auth"] == "token") {
+                        if (headers && headers["auth"] == "token") {
                             return new Promise((resolve, reject) => { 
                                 Deno.readFile("test/test.jpg").then((img) => {
                                     resolve(new Response(img, { status: 200 }) )
@@ -558,25 +559,23 @@ Deno.test({
                         }
                     }
                     
-                    break;
 
                 default:
                     throw new Error("this path isn't mocked: " + url)
-                    break;
             }
         })
-
-        using stubWriteFile = stub(Deno, "writeFile", () => { return Promise.resolve() })
-
 
         {
             using stubAddPage = stub(mockPdf, "addPage")
             using stubImage = stub(mockPdf, "image")
+            using stubError = stub(console, "error")
     
             //result: fail without header
-            await assertRejects(
-                async () => { await downloadWebcomic(mockPdf, new URL("https://test.com/1"), "img", "a", 10000) },
-                Error, messages.errorFetchAuthlike)
+            await downloadWebcomic(mockPdf, new URL("https://test.com/1"), "img", "a", 10000)
+
+            assertSpyCallArgs(stubError, 0, [constructHttpErrorMsg(403, messages.errorFetchAuthlike)])
+            assertSpyCalls(stubAddPage, 0)
+            assertSpyCalls(stubImage, 0)
         }
 
         using stubAddPage2 = stub(mockPdf, "addPage")
@@ -602,17 +601,14 @@ Deno.test({
                 case "https://test.com/1":
                     return Promise.resolve(new Response(
                         "<html><img src='https://test.com/img1'><a id='next' href='/2'>next</a></html>", { status: 200 }) )
-                    break;
 
                 case "https://test.com/2":
                     return Promise.resolve(new Response(
                         "<html><img src='https://test.com/img2'><a id='next' href='/3'>next</a></html>", { status: 200 }) )
-                    break;
 
                 case "https://test.com/3":
                     return Promise.resolve(new Response(
                         "<html><img src='https://test.com/img3'></html>", { status: 200 }) )
-                    break;
                     
                 case "https://test.com/img1":
                 case "https://test.com/img2":
@@ -621,11 +617,9 @@ Deno.test({
                         const buffer = await Deno.readFile("test/test.gif")
                         return Promise.resolve(new Response(buffer, {status: 200}))
                     }
-                    break;
 
                 default:
                     throw new Error("this path isn't mocked: " + url)
-                    break;
             }
         })
 
