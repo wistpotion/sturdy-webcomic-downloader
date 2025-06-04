@@ -15,4 +15,10 @@ Servers that are a bit less reliable.
 
 ## Selector cheat sheet
 
+### Testing your selectors
+
 ## Headers
+
+### Why do you need them?
+
+### How to find them
