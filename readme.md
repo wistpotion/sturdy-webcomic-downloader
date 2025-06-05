@@ -43,11 +43,15 @@ Usage: `path/to/binary.exe <firstPageURL> <imageQuerySelector> <nextLinkQuerySel
 
 - `--headers [key] [value]`: Headers to send along with every request. These are useful if a webcomic requires you to log in to read it. Multiple key value pairs can be used (example: `--headers "auth" "token" "gdpr" "consented"`)
 
+- `--imageOutputDir [path]`: When specified, the software will output the raw downloaded images. Useful if you want to post process using other programs, like the Kindle Comic Converter.
+
 ### Examples
 
 Download the first 50 pages of xkcd: `sturdywcdl-win.exe "https://xkcd.com/1/" "div#comic > img" "a[rel='next']" xkcd.pdf --maxPages 50` 
 
-Download the entirety of Goth Western: `"https://www.gothwestern.com/" "img#cc-comic" "div#cc-comicbody > a" downloads/gothicwestern.pdf`
+Download the entirety of Goth Western: `sturdywcdl-win.exe "https://www.gothwestern.com/" "img#cc-comic" "div#cc-comicbody > a" downloads/gothicwestern.pdf`
+
+Download the first 10 pages of Lost Nightmare and keep the images: `sturdywcdl-win.exe "https://www.lostnightmare.com/comic/01-01" "img#cc-comic" "div#cc-comicbody > a" dl/lostnightmare.pdf --maxPages 10 --imageOutputDir "dl/img"`
 
 ## Very common errors
 

@@ -14,6 +14,7 @@ import { imageSize } from "npm:image-size"
 
 // deno-lint-ignore no-unused-vars
 import pdfkit from "npm:pdfkit" //required for types
+import { missingBase64 } from "./missing.png.ts";
 
 
 
@@ -160,38 +161,61 @@ export async function getNextPage(url: URL, requestInit?: RequestInit): Promise<
 }
 
 
+
+interface IImageMetadata {
+    width: number;
+    height: number;
+    orientation?: number;
+    type?: string;
+}
+
+interface IImage {
+    buffer: ArrayBuffer,
+    metadata: IImageMetadata
+}
+
+
+/**
+ * Create an IImage from a buffer
+ * @param imageBuffer 
+ * @returns 
+ */
+export function withMetadata(imageBuffer: ArrayBuffer): IImage {
+    try {
+        const metadata = imageSize(new Uint8Array(imageBuffer))
+        return {
+            buffer: imageBuffer,
+            metadata
+        }
+    } catch (e) {
+        //nice to be explicit about it
+        const err = e as Error
+        throw err
+    }
+}
+
+
 /**
  * Insert an image into a pdf.
  * @param pdf The pdf document to insert into.
  * @param image The image to insert into the pdf.
  */
-export function insertImage(pdf: PDFKit.PDFDocument, image: ArrayBuffer) {
-
-    let metadata
-    
-    //attempt getting some data from the supposed image. if we can't, the buffer is probably not an image, or otherwise corrupt.
-    try {
-        metadata = imageSize(new Uint8Array(image))
-    } catch {
-        console.warn(messages.warnMalformedImage)
-        insertPageForMissingImage(pdf)
-        return
-    }
-
+export function insertImage(pdf: PDFKit.PDFDocument, image: IImage) {
+    const metadata = image.metadata
 
     // //add a page to the pdf in the same size as the image we got
     pdf.addPage({size: [metadata.width, metadata.height]})
 
     // //check if the current image format is supported by the pdf
     if ( metadata.type == "png" || metadata.type == "jpg") {
-        pdf.image(image, 0, 0)
+        pdf.image(image.buffer, 0, 0)
 
     } else {
         //if no: convert the image to png
         const canvas = canvasKit.createCanvas(metadata.width, metadata.height)
         const ctx = canvas.getContext("2d")
 
-        const decoded = canvas.decodeImage(image)
+        const decoded = canvas.decodeImage(image.buffer)
         ctx.drawImage(decoded, 0, 0)
 
         const imageData = canvas.toBuffer("image/png")
@@ -213,6 +237,24 @@ export function insertPageForMissingImage(pdf: PDFKit.PDFDocument) {
     pdf.text("image missing")
 }
 
+export interface IDownloadWebcomicOptions {
+    headers?: Record<string, string>,
+    /**
+     * If defined, the program will save images to specified directory
+     */
+    imageOutputDir?: string
+}
+
+
+function base64ToArrayBuffer(base64: string) {
+    //https://stackoverflow.com/questions/21797299/how-can-i-convert-a-base64-string-to-arraybuffer
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes.buffer;
+}
 
 /**
  * Download a webcomic and insert it into a pdf.
@@ -221,7 +263,7 @@ export function insertPageForMissingImage(pdf: PDFKit.PDFDocument) {
  * @param imageQuerySelector A css style query selector for an <img> element. The src attribute is used for downloading the image.
  * @param nextLinkQuerySelector A css style query selector for an <a> element. The href attribute is used for downloading the next page of the webcomic.
  * @param maxPages The maximum amount of pages to download.
- * @param headers Headers to send along with every request. See documentation for more information.
+ * @param options Object with options. 
  * @returns 
  */
 export async function downloadWebcomic(
@@ -230,11 +272,27 @@ export async function downloadWebcomic(
         imageQuerySelector: string,
         nextLinkQuerySelector: string, 
         maxPages: number,
-        headers?: Record<string, string>){
+        options?: IDownloadWebcomicOptions){
 
     console.log("Starting download of: " + firstPageURL.href)
     
-    
+    let headers: Record<string, string> | undefined
+    let imagesOutputDirectory
+    const imageMissingImage = withMetadata(base64ToArrayBuffer(missingBase64))
+
+    if (options) {
+        headers = options.headers
+
+        if (options.imageOutputDir) {
+            imagesOutputDirectory = options.imageOutputDir
+
+        }
+    }
+
+    if (imagesOutputDirectory) {
+        await Deno.mkdir(imagesOutputDirectory, { recursive: true })
+    }
+
     const requestInit: RequestInit = { headers }
     const base = firstPageURL.origin
 
@@ -282,20 +340,43 @@ export async function downloadWebcomic(
             //we did find a url: attempt to download the image from the url
 
             const maxAttempts = 10
-            let image
+            let imageBuffer
             let err: Error | undefined
             for (let attempt = 0; attempt < maxAttempts; attempt++ ) {
                 try {
-                    image = await getImage(imageURL, requestInit)
+                    imageBuffer = await getImage(imageURL, requestInit)
                     break;
                 } catch (e) {
                     err = e as Error
                 }
             }
 
-            if (image != undefined) {
+
+            if (imageBuffer != undefined) {
                 //we managed to download the url: insert the image into the document
-                await insertImage(pdf, image)
+                let image
+                try {
+                    image = withMetadata(imageBuffer)
+                } catch {
+                    //
+                }
+
+                if (image) {
+                    insertImage(pdf, image)
+
+                    if(imagesOutputDirectory) {
+                        await Deno.writeFile(imagesOutputDirectory + "/" + i + "." + image.metadata.type, new Uint8Array(image.buffer))
+                    }
+                    
+                } else {
+                    console.warn(messages.warnMalformedImage)
+                    insertPageForMissingImage(pdf)
+                    
+                    if(imagesOutputDirectory) {
+                        await Deno.writeFile(imagesOutputDirectory + "/" + i + "." + imageMissingImage.metadata.type, new Uint8Array(imageMissingImage.buffer))
+                    }
+                }
+
 
             } else {
                 //we didn't manage to download the url: insert a blank page, warn and move on
@@ -306,12 +387,20 @@ export async function downloadWebcomic(
 
                 insertPageForMissingImage(pdf)
 
+                if(imagesOutputDirectory) {
+                    await Deno.writeFile(imagesOutputDirectory + "/" + i + "." + imageMissingImage.metadata.type, new Uint8Array(imageMissingImage.buffer))
+                }
             }
 
         } else {
             //we didn't find a url to an image in the page: insert a blank page, warn and move on
 
             insertPageForMissingImage(pdf)
+
+            if(imagesOutputDirectory) {
+                await Deno.writeFile(imagesOutputDirectory + "/" + i + "." + imageMissingImage.metadata.type, new Uint8Array(imageMissingImage.buffer))
+            }
+
             console.warn(messages.warnCannotGetImage)
         }
     

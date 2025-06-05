@@ -12,12 +12,13 @@
 
 
 
-import { assertEquals, assertRejects } from "jsr:@std/assert"
+import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert"
 import { assertSpyCallArgs, assertSpyCalls, returnsNext, stub } from "@std/testing/mock"
-import { getImage, findImageURL, findNextPageURL, downloadWebcomic, getNextPage, insertImage, messages, insertPageForMissingImage, constructHttpErrorMsg } from "./downloader.ts"
+import { getImage, findImageURL, findNextPageURL, downloadWebcomic, getNextPage, insertImage, messages, insertPageForMissingImage, constructHttpErrorMsg, withMetadata as withMetadata } from "./downloader.ts"
 import * as denoDom from 'https://deno.land/x/deno_dom/deno-dom-wasm.ts'
 import { toReadableStream } from "https://deno.land/std/io/mod.ts";
 import * as canvasKit from "https://deno.land/x/canvas/mod.ts"
+import { mkdir } from "node:fs";
 
 
 
@@ -338,13 +339,14 @@ Deno.test({
     name: "insertImage image requires conversion: convert to png and add page",
     fn: async () => {
         //this can probably be done significantly better
-        const buffer = new Response(toReadableStream(await Deno.open("test/test.gif"))).arrayBuffer()
+        const buffer = await new Response(toReadableStream(await Deno.open("test/test.gif"))).arrayBuffer()
         // const uint8Buffer = new Uint8Array(await buffer)
 
         using stubAddPage = stub(mockPdf, "addPage")
         using stubImage = stub(mockPdf, "image")
 
-        await insertImage(mockPdf, await buffer)
+        const image = withMetadata(buffer)
+        await insertImage(mockPdf, image)
 
         assertSpyCalls(stubAddPage, 1)
         assertSpyCalls(stubImage, 1)
@@ -353,24 +355,71 @@ Deno.test({
 
 
 Deno.test({
-    name: "insertImage image is malformed: insert empty and log",
+    name: "downloadWebcomic image is malformed: insert empty and log",
     fn: async () => {
-        const buffer = await new Response(
-                toReadableStream(
-                    await Deno.open("test/garbage.txt")
-                )
-            ).arrayBuffer()
+        using stubFetch = stub(globalThis, "fetch", fetchMock(
+            {
+                ...fetchFullServerMockObject,
+                "https://test.com/img1": () => { return new Promise((resolve, reject) => { 
+                                        Deno.readFile("test/garbage.txt").then((img) => {
+                                            resolve(new Response(img, { status: 200 }) )
+                                        })}) },
+            }
+        ))
         
         
         using stubAddPage = stub(mockPdf, "addPage")
-        // console.log(mockPdf.addPage)
         using stubWarn = stub(console, "warn")
-        // using stubImage = stub(pdf, "image")
+        using stubImage = stub(mockPdf, "image")
+        using stubWriteFile = stub(Deno, "writeFile")
+        using stubMkdir = stub(Deno, "mkdir")
 
-        await insertImage(mockPdf, buffer)
+        await downloadWebcomic(mockPdf, new URL("https://test.com/1"), "img", "a", 10000, { imageOutputDir: "img" })
 
-        assertSpyCalls(stubAddPage, 1)
+        assertSpyCalls(stubAddPage, 3)
+        assertSpyCalls(stubImage, 2)
+        
         assertSpyCallArgs(stubWarn, 0, [messages.warnMalformedImage])
+
+        assertSpyCalls(stubWriteFile, 3)
+
+        assertSpyCalls(stubMkdir, 1)
+        
+    }
+})
+
+
+Deno.test({
+    name: "downloadWebcomic get image fails: insert empty and log",
+    fn: async () => {
+        using stubFetch = stub(globalThis, "fetch", fetchMock(
+            {
+                ...fetchFullServerMockObject,
+                "https://test.com/img1": () => { return new Promise((resolve, reject) => { 
+                                        Deno.readFile("test/garbage.txt").then((img) => {
+                                            resolve(new Response(img, { status: 500 }) )
+                                        })}) },
+            }
+        ))
+        
+        
+        using stubAddPage = stub(mockPdf, "addPage")
+        using stubWarn = stub(console, "warn")
+        using stubImage = stub(mockPdf, "image")
+        using stubWriteFile = stub(Deno, "writeFile")
+        using stubMkdir = stub(Deno, "mkdir")
+
+
+        await downloadWebcomic(mockPdf, new URL("https://test.com/1"), "img", "a", 10000, { imageOutputDir: "img" })
+
+        assertSpyCalls(stubAddPage, 3)
+        assertSpyCalls(stubImage, 2)
+        
+        assertSpyCallArgs(stubWarn, 0, [messages.warnCannotGetImage])
+
+        assertSpyCalls(stubWriteFile, 3)
+
+        assertSpyCalls(stubMkdir, 1)
     }
 })
 
@@ -385,7 +434,8 @@ Deno.test({
         using stubAddPage = stub(mockPdf, "addPage")
         using stubImage = stub(mockPdf, "image")
         
-        await insertImage(mockPdf, buffer)
+        const image = withMetadata(buffer)
+        await insertImage(mockPdf, image)
         
         //insertImage ok: page size is equal to image size
         const addPageArgs: PDFKit.PDFDocumentOptions = {
@@ -583,7 +633,7 @@ Deno.test({
         using stubImage2 = stub(mockPdf, "image")
 
         //result: succeed with header
-        await downloadWebcomic(mockPdf, new URL("https://test.com/1"), "img", "a", 10000, { auth: "token" }),
+        await downloadWebcomic(mockPdf, new URL("https://test.com/1"), "img", "a", 10000, { headers: { auth: "token" }}),
 
         assertSpyCalls(stubAddPage2, 1)
         assertSpyCalls(stubImage2, 1)
@@ -591,45 +641,121 @@ Deno.test({
 })
 
 
+function fetchMock(serverMock: Record<string, () => Promise<Response>>) {
+    // prefer to be explicit about function being async
+    // deno-lint-ignore require-await
+    return async (url: URL | RequestInfo) => {
+
+        if (!(url instanceof URL)) {
+            throw new Error("The mock is only designed to handle URLs!")
+        }
+
+        const res = serverMock[url.href]()
+        if (res == undefined) {
+            throw new Error("this path isn't mocked: " + url)
+        }
+
+        return res
+    }
+}
+
+
+const fetchFullServerMockObject: Record<string, () => Promise<Response>> = {
+        "https://test.com/1": () => {  
+            return Promise.resolve(new Response(
+                "<html><img src='https://test.com/img1'><a id='next' href='/2'>next</a></html>", { status: 200 }) ) },
+
+        "https://test.com/2": () => {  
+            return Promise.resolve(new Response(
+                "<html><img src='https://test.com/img2'><a id='next' href='/3'>next</a></html>", { status: 200 }) ) },
+
+        "https://test.com/3": () => {  
+            return Promise.resolve(new Response(
+                "<html><img src='https://test.com/img3'></html>", { status: 200 }) ) },
+
+        "https://test.com/img1": () => {  
+            return new Promise((resolve, reject) => { 
+                                Deno.readFile("test/test.jpg").then((img) => {
+                                    resolve(new Response(img, { status: 200 }) )
+                                })}) },
+
+        "https://test.com/img2": () => {  
+            return new Promise((resolve, reject) => { 
+                                Deno.readFile("test/test.jpg").then((img) => {
+                                    resolve(new Response(img, { status: 200 }) )
+                                })}) },
+                                
+        "https://test.com/img3": () => {  
+            return new Promise((resolve, reject) => { 
+                                Deno.readFile("test/test.jpg").then((img) => {
+                                    resolve(new Response(img, { status: 200 }) )
+                                })}) },
+        
+    }
 
 Deno.test({
     name: "downloadWebcomic ok",
     fn: async () => {
-            // throw new Error()
-        using stubFetch = stub(globalThis, "fetch", async (url) => {
-            switch (url.toString()) {
-
-                case "https://test.com/1":
-                    return Promise.resolve(new Response(
-                        "<html><img src='https://test.com/img1'><a id='next' href='/2'>next</a></html>", { status: 200 }) )
-
-                case "https://test.com/2":
-                    return Promise.resolve(new Response(
-                        "<html><img src='https://test.com/img2'><a id='next' href='/3'>next</a></html>", { status: 200 }) )
-
-                case "https://test.com/3":
-                    return Promise.resolve(new Response(
-                        "<html><img src='https://test.com/img3'></html>", { status: 200 }) )
-                    
-                case "https://test.com/img1":
-                case "https://test.com/img2":
-                case "https://test.com/img3":
-                    {
-                        const buffer = await Deno.readFile("test/test.gif")
-                        return Promise.resolve(new Response(buffer, {status: 200}))
-                    }
-
-                default:
-                    throw new Error("this path isn't mocked: " + url)
-            }
-        })
+        using stubFetch = stub(globalThis, "fetch", fetchMock(fetchFullServerMockObject))
 
         using stubAddPage = stub(mockPdf, "addPage")
         using stubImage = stub(mockPdf, "image")
+        using stubWriteFile = stub(Deno, "writeFile")
+        using stubMkdir = stub(Deno, "mkdir")
 
         await downloadWebcomic(mockPdf, new URL("https://test.com/1"), "img", "a", 10000),
 
         assertSpyCalls(stubAddPage, 3)
         assertSpyCalls(stubImage, 3)
+        assertSpyCalls(stubWriteFile, 0)
+        assertSpyCalls(stubMkdir, 0)
+    }
+})
+
+
+Deno.test({
+    name: "downloadWebcomic ok with keepImages option",
+    fn: async () => {
+        using stubFetch = stub(globalThis, "fetch", fetchMock(fetchFullServerMockObject))
+
+        using stubAddPage = stub(mockPdf, "addPage")
+        using stubImage = stub(mockPdf, "image")
+        using stubWriteFile = stub(Deno, "writeFile")
+        using stubMkdir = stub(Deno, "mkdir")
+
+        await downloadWebcomic(mockPdf, new URL("https://test.com/1"), "img", "a", 10000, { imageOutputDir: "img" }),
+
+        assertSpyCalls(stubAddPage, 3)
+        assertSpyCalls(stubImage, 3)
+        assertSpyCalls(stubWriteFile, 3)
+        assertSpyCalls(stubMkdir, 1)
+    }
+})
+
+
+Deno.test({
+    name: "getImageMetadata ok png",
+    fn: async () => {
+        const buffer = await Deno.readFile("test/test.gif")
+        assertEquals(
+            withMetadata(buffer.buffer),
+            {
+                buffer: buffer.buffer,
+                metadata: {
+                    width: 300,
+                    height: 500,
+                    type: "gif",
+                }
+            }
+        )
+    }
+})
+
+
+Deno.test({
+    name: "getImageMetadata malformed image",
+    fn: async () => {
+        const buffer = await Deno.readFile("test/garbage.txt")
+        assertThrows(() => { withMetadata(buffer.buffer) })
     }
 })

@@ -1,11 +1,12 @@
 import yargs from 'https://deno.land/x/yargs@v17.7.2-deno/deno.ts'
-import { downloadWebcomic } from "./downloader.ts";
+import { downloadWebcomic } from "../src/downloader.ts";
 import * as fs from 'node:fs';
 import pdfkit from "npm:pdfkit"
 
 interface IArgs {
 	maxPages: number,
 	headers?: string[]
+	imageOutputDir?: string
 	"_": [ firstPageUrl: string, imageQuerySelector: string, nextLinkQuerySelector: string, outputFile: string ]
 }
 
@@ -14,13 +15,19 @@ const args: IArgs = yargs(Deno.args)
 	.wrap(null)
 
 	.usage("Usage: $0 <firstPageURL> <imageQuerySelector> <nextLinkQuerySelector> <outputFile> [options]")
-	.default("maxPages", 10000)
 	.example("$0 https://comics.com/webcomic/page1 '#imagepanel' 'a.nextbuttonclass' comic.pdf", "standard usage")
 	.example("$0 https://comics.com/1 #image #next out.pdf --headers 'authorization' '0qbb83g0ay23guawf9l' 'gdpr' 'consented'" , "using headers")
+	
 	.array("headers")
 	.describe("headers", "Key value pairs that are sent along as headers with all http requests. Useful if a website requires authorization or other cookies.")
+	
 	.number("maxPages")
+	.default("maxPages", 10000)
 	.describe("maxPages", "Limits the amount of pages that can will be downloaded.")
+	
+	.string("imageOutputDir")
+	.describe("imageOutputDir", "When specified, the software will output the raw downloaded images. Useful if you want to post process using other programs.")
+
 	.demandCommand(4)
 	
 .parse() //turn what the user wrote in the terminal into something readable
@@ -59,7 +66,11 @@ const pdf = new pdfkit({autoFirstPage: false})
 pdf.pipe(fs.createWriteStream(outputFile))
 
 //do the actual downloading in to the pdf
-await downloadWebcomic(pdf, new URL(firstPageURL), imageQuerySelector, nextLinkQuerySelector, args.maxPages, headers)
+await downloadWebcomic(pdf, new URL(firstPageURL), imageQuerySelector, nextLinkQuerySelector, args.maxPages, 
+	{ 
+		headers,
+		imageOutputDir: args.imageOutputDir
+	})
 
 
 console.log("===== done! =====")

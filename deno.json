@@ -9,13 +9,13 @@
   }, 
   "tasks": {
     "test": "deno test --allow-read --allow-net --allow-write",
-    "start": "deno run --allow-read --allow-net --allow-write main.ts",
+    "start": "deno run --allow-read --allow-net --allow-write src/main.ts",
 
-    "compile-windows": "deno compile --allow-read --allow-net --allow-write --target x86_64-pc-windows-msvc         --output bin/sturdywcdl-win main.ts",
-    "compile-mac-x86": "deno compile --allow-read --allow-net --allow-write --target x86_64-apple-darwin            --output bin/sturdywcdl-mac-x86 main.ts",
-    "compile-mac-aarch": "deno compile --allow-read --allow-net --allow-write --target aarch64-apple-darwin         --output bin/sturdywcdl-mac-aarch main.ts",
-    "compile-linux-x86": "deno compile --allow-read --allow-net --allow-write --target x86_64-unknown-linux-gnu     --output bin/sturdywcdl-linux-x86 main.ts",
-    "compile-linux-aarch": "deno compile --allow-read --allow-net --allow-write --target aarch64-unknown-linux-gnu  --output bin/sturdywcdl-linux-aarch main.ts",
+    "compile-windows": "deno compile --allow-read --allow-net --allow-write --target x86_64-pc-windows-msvc         --output bin/sturdywcdl-win         src/main.ts",
+    "compile-mac-x86": "deno compile --allow-read --allow-net --allow-write --target x86_64-apple-darwin            --output bin/sturdywcdl-mac-x86     src/main.ts",
+    "compile-mac-aarch": "deno compile --allow-read --allow-net --allow-write --target aarch64-apple-darwin         --output bin/sturdywcdl-mac-aarch   src/main.ts",
+    "compile-linux-x86": "deno compile --allow-read --allow-net --allow-write --target x86_64-unknown-linux-gnu     --output bin/sturdywcdl-linux-x86   src/main.ts",
+    "compile-linux-aarch": "deno compile --allow-read --allow-net --allow-write --target aarch64-unknown-linux-gnu  --output bin/sturdywcdl-linux-aarch src/main.ts",
     
     "compile": "deno task compile-windows ; deno task compile-mac-x86 ; deno task compile-mac-aarch ; deno task compile-linux-x86 ; deno task compile-linux-aarch"
   }
