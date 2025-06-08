@@ -4,8 +4,7 @@ The Sturdy Webcomic Downloader is a tool that turns webcomics into pdfs. Or a fo
 
 It works on windows, linux and mac.
 
-## What does it do, more specifically?
-### Downloads webcomics in the very specific format
+## What does it work on, more specifically?
 
 If reading the webcomic goes like:
 - go to website
