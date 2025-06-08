@@ -7,7 +7,7 @@
  */
 
 
-import { downloadWebcomic } from "../downloader.ts";
+import { downloadWebcomic } from "../src/downloader.ts";
 import * as fs from 'node:fs';
 import pdfkit from "npm:pdfkit"
 
