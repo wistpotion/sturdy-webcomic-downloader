@@ -14,9 +14,9 @@ interface IArgs {
 const args: IArgs = yargs(Deno.args)
 	.wrap(null)
 
-	.usage("Usage: $0 <firstPageURL> <imageQuerySelector> <nextLinkQuerySelector> <outputFile> [options]")
-	.example("$0 https://comics.com/webcomic/page1 '#imagepanel' 'a.nextbuttonclass' comic.pdf", "standard usage")
-	.example("$0 https://comics.com/1 #image #next out.pdf --headers 'authorization' '0qbb83g0ay23guawf9l' 'gdpr' 'consented'" , "using headers")
+	.usage("Usage: sturdywcdl <firstPageURL> <imageQuerySelector> <nextLinkQuerySelector> <outputFile> [options]")
+	.example("sturdywcdl https://comics.com/webcomic/page1 '#imagepanel' 'a.nextbuttonclass' comic.pdf", "standard usage")
+	.example("sturdywcdl https://comics.com/1 #image #next out.pdf --headers 'authorization' '0qbb83g0ay23guawf9l' 'gdpr' 'consented'" , "using headers")
 	
 	.array("headers")
 	.describe("headers", "Key value pairs that are sent along as headers with all http requests. Useful if a website requires authorization or other cookies.")
