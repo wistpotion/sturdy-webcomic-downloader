@@ -31,10 +31,18 @@ export const messages = {
     "errorFetch404": " - Error fetching url. Check if you have entered a correct url.",
     "errorUnknown": " - There was an unknown error fetching the page. Either the webpage is doing something VERY funny, or you should contact the developer of this software.",
 
-    "errorGetNextPage": " - Unknown error with fetching the next page."
+    "errorGetNextPage": " - Unknown error with fetching the next page.",
+
+    "errorCannotFindNextPageButtonOnFirstPage": "Cannot find the next page button specified on the first page submitted. (This is most likely due to your query selector being incorrect)",
+    "errorNextPageButtonLacksHref": "The next page button that has been found by the query selecter is missing a href attribute.",
 }
 
 
+
+export enum EnumFindImageURLErrors {
+    elementNotFound = "query selector couldn't find an element",
+    elementMissingSrc = "the element misses the source attribute"
+}
 /**
  * Find the URL to the image in an html document.
  * @param document The html document to search.
@@ -42,14 +50,14 @@ export const messages = {
  * @param base The base of the url (example: https://comics.com).
  * @returns A URL if a link was found, otherwise null.
  */
-export function findImageURL(document: denoDom.HTMLDocument, imageQuerySelector: string, base: URL | string): URL | null {
+export function findImageURL(document: denoDom.HTMLDocument, imageQuerySelector: string, base: URL | string): URL | EnumFindImageURLErrors {
     const element = document.querySelector(imageQuerySelector)
 
-    if (element == null) { return null }
+    if (element == null) { return EnumFindImageURLErrors.elementNotFound }
 
     const link = element.getAttribute("src")
 
-    if (link == null) { return null }
+    if (link == null) { return EnumFindImageURLErrors.elementMissingSrc }
 
     //we use base so that relative links also work (example: "/2" instead of "https://comic.com/2")
     return new URL(link, base)
@@ -62,8 +70,8 @@ export function findImageURL(document: denoDom.HTMLDocument, imageQuerySelector:
  * @param helperText A text that helps explain to the user what went wrong, and how to fix it.
  * @returns Constructed error message.
  */
-export function constructHttpErrorMsg(status: number, helperText: string) {
-    return "http " + status + ":" + helperText
+export function constructHttpErrorMsg(status: number, helperText: string, url: string) {
+    return "http " + status + ":" + helperText + "\nProblem URL: " + url
 }
 
 
@@ -77,7 +85,7 @@ export async function helpfullyFailingFetch(url: URL, requestInit?: RequestInit)
     //this function is tested by the tests for getImage and getNextPage
     
     const response = await fetch(url, requestInit)
-    
+
     if (response.ok) {
         return response
 
@@ -90,17 +98,17 @@ export async function helpfullyFailingFetch(url: URL, requestInit?: RequestInit)
             case 302:
             case 303:
             case 307:
-                throw new Error(constructHttpErrorMsg(response.status, messages.errorFetchAuthlike))
+                throw new Error(constructHttpErrorMsg(response.status, messages.errorFetchAuthlike, url.toString()))
 
             case 503:
             case 500:
-                throw new Error(constructHttpErrorMsg(response.status, messages.errorFetchServerIssues))
+                throw new Error(constructHttpErrorMsg(response.status, messages.errorFetchServerIssues, url.toString()))
 
             case 404: 
-                throw new Error(constructHttpErrorMsg(response.status, messages.errorFetch404))
+                throw new Error(constructHttpErrorMsg(response.status, messages.errorFetch404, url.toString()))
 
             default: 
-                throw new Error(constructHttpErrorMsg(response.status, messages.errorUnknown))
+                throw new Error(constructHttpErrorMsg(response.status, messages.errorUnknown, url.toString()))
         }
     }
 }
@@ -120,6 +128,11 @@ export async function getImage(url: URL, requestInit?: RequestInit): Promise<Arr
 }
 
 
+
+export enum EnumFindNextPageURLErrors {
+    elementNotFound = "element not found",
+    elementMissingHref = "element lacks href",
+}
 /**
  * Find the URL to the next page from the html document.
  * @param document The html document.
@@ -127,15 +140,15 @@ export async function getImage(url: URL, requestInit?: RequestInit): Promise<Arr
  * @param base The base of the url (example: https://comics.com).
  * @returns The url for the next page, or null if none was found.
  */
-export function findNextPageURL(document: denoDom.HTMLDocument, nextQuerySelector: string, base: URL | string): URL | null {
+export function findNextPageURL(document: denoDom.HTMLDocument, nextQuerySelector: string, base: URL | string): URL | EnumFindNextPageURLErrors {
     
     const element = document.querySelector(nextQuerySelector)
 
-    if (element == null) { return null }
+    if (element == null) { return EnumFindNextPageURLErrors.elementNotFound }
 
     const link = element.getAttribute("href")
 
-    if (link == null) { return null }
+    if (link == null) { return EnumFindNextPageURLErrors.elementMissingHref }
 
     //we use base so that relative links also work (example: "/2" instead of "https://comic.com/2")
     return new URL(link, base)
@@ -336,7 +349,7 @@ export async function downloadWebcomic(
         //find the url of the image on this page
         const imageURL = findImageURL(page, imageQuerySelector, base)
 
-        if (imageURL != null) {
+        if (typeof imageURL != "string") {
             //we did find a url: attempt to download the image from the url
 
             const maxAttempts = 10
@@ -408,11 +421,22 @@ export async function downloadWebcomic(
         //search for the url to the next page
         const nextURL = findNextPageURL(page, nextLinkQuerySelector, base)
         
-        if (nextURL != null) {
+        if (typeof nextURL != "string") {
             //we did find a url: queue it and continue with the loop
             queuedURL = nextURL
 
         } else {
+            if (i == 0) {
+                if (nextURL == "element lacks href") {
+                    return Promise.reject(messages.errorNextPageButtonLacksHref)
+                 
+                } else if (nextURL == "element not found") {
+                    return Promise.reject(messages.errorCannotFindNextPageButtonOnFirstPage)
+
+                }
+
+            }
+
             //we didn't find a url: this probably means that this is the last page, call it a day and return
             return
         }

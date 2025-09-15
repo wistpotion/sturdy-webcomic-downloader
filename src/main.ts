@@ -28,6 +28,9 @@ const args: IArgs = yargs(Deno.args)
 	.string("imageOutputDir")
 	.describe("imageOutputDir", "When specified, the software will output the raw downloaded images. Useful if you want to post process using other programs.")
 
+	// .boolean("followRedirects")
+	// .describe("followRedirecs", "Instead of throwing when redirected, follow the redirect." )
+
 	.demandCommand(4)
 	
 .parse() //turn what the user wrote in the terminal into something readable

@@ -4,6 +4,7 @@
  * This file contains tests for the downloader. It's got twice the size of the downloader, and took a fair bit to write, but it saves a LOT of debugging time.
  * 
  * 
+ * 
  */
 
 
@@ -14,7 +15,7 @@
 
 import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert"
 import { assertSpyCallArgs, assertSpyCalls, returnsNext, stub } from "@std/testing/mock"
-import { getImage, findImageURL, findNextPageURL, downloadWebcomic, getNextPage, insertImage, messages, insertPageForMissingImage, constructHttpErrorMsg, withMetadata as withMetadata } from "./downloader.ts"
+import { getImage, findImageURL, findNextPageURL, downloadWebcomic, getNextPage, insertImage, messages, insertPageForMissingImage, constructHttpErrorMsg, withMetadata as withMetadata, EnumFindNextPageURLErrors, EnumFindImageURLErrors } from "./downloader.ts"
 import * as denoDom from 'https://deno.land/x/deno_dom/deno-dom-wasm.ts'
 import { toReadableStream } from "https://deno.land/std/io/mod.ts";
 import * as canvasKit from "https://deno.land/x/canvas/mod.ts"
@@ -31,7 +32,7 @@ const mockPdf = {
 
 
 Deno.test({
-    name: "findImageURL couldn't find element: return null",
+    name: "findImageURL couldn't find element: return error enum",
     fn: function() {
         //couldn't find the image
         assertEquals(
@@ -42,12 +43,12 @@ Deno.test({
                 "img",
                 "https://test.com"
             ), 
-            null)
+            EnumFindImageURLErrors.elementNotFound)
     }})
         
 
 Deno.test({
-    name: "findImageURL link not in element: return null",
+    name: "findImageURL link not in element: return error enum",
     fn: function() {
         //image has no link
         assertEquals(
@@ -58,7 +59,7 @@ Deno.test({
                 "img",
                 "https://test.com"
             ), 
-            null)
+            EnumFindImageURLErrors.elementMissingSrc)
     }})
         
 
@@ -111,7 +112,7 @@ Deno.test({
         for (let i = 0; i < results.length; i++) {
             await assertRejects(
                 async () => { await getImage(new URL("https://test.com")) },
-                Error, constructHttpErrorMsg((await results[i]).status, messages.errorFetchAuthlike))
+                Error, constructHttpErrorMsg((await results[i]).status, messages.errorFetchAuthlike, "https://test.com"))
         }
     }})
 
@@ -132,7 +133,7 @@ Deno.test({
         for (let i = 0; i < results.length; i++) {
             await assertRejects(
                 async () => { await getNextPage(new URL("https://test.com")) },
-                Error, constructHttpErrorMsg((await results[i]).status, messages.errorFetchAuthlike))
+                Error, constructHttpErrorMsg((await results[i]).status, messages.errorFetchAuthlike, "https://test.com"))
         }
     }})
 
@@ -150,7 +151,7 @@ Deno.test({
         for (let i = 0; i < results.length; i++) {
             await assertRejects(
                 async () => { await getImage(new URL("https://test.com")) },
-                Error, constructHttpErrorMsg((await results[i]).status, messages.errorFetchServerIssues))
+                Error, constructHttpErrorMsg((await results[i]).status, messages.errorFetchServerIssues, "https://test.com"))
         }
     }})
     
@@ -168,7 +169,7 @@ Deno.test({
         for (let i = 0; i < results.length; i++) {
             await assertRejects(
                 async () => { await getNextPage(new URL("https://test.com")) },
-                Error, constructHttpErrorMsg((await results[i]).status, messages.errorFetchServerIssues))
+                Error, constructHttpErrorMsg((await results[i]).status, messages.errorFetchServerIssues, "https://test.com"))
         }
     }})
 
@@ -186,7 +187,7 @@ Deno.test({
         for (let i = 0; i < results.length; i++) {
             await assertRejects(
                 async () => { await getImage(new URL("https://test.com")) },
-                Error, constructHttpErrorMsg((await results[i]).status, messages.errorFetch404))
+                Error, constructHttpErrorMsg((await results[i]).status, messages.errorFetch404, "https://test.com"))
         }
     }})
 
@@ -203,7 +204,7 @@ Deno.test({
         for (let i = 0; i < results.length; i++) {
             await assertRejects(
                 async () => { await getNextPage(new URL("https://test.com")) },
-                Error,  constructHttpErrorMsg((await results[i]).status, messages.errorFetch404))
+                Error,  constructHttpErrorMsg((await results[i]).status, messages.errorFetch404, "https://test.com"))
         }
     }})
 
@@ -267,24 +268,24 @@ Deno.test({
 
 
 Deno.test({
-    name: "findNextPageURL couldn't find element: return null",
+    name: "findNextPageURL couldn't find element: return error enum",
     fn: () => {
         assertEquals(
             findNextPageURL(new denoDom.DOMParser().parseFromString(
                 "<html></html>", "text/html"
             ), "a", ""),
-            null)
+            EnumFindNextPageURLErrors.elementNotFound)
     }})
 
     
 Deno.test({
-    name: "findNextPageURL element has no link: return null",
+    name: "findNextPageURL element has no link: return error enum",
     fn: () => {
         assertEquals(
             findNextPageURL(new denoDom.DOMParser().parseFromString(
                 "<html><a>next</a></html>", "text/html"
             ), "a", ""),
-            null)
+            EnumFindNextPageURLErrors.elementMissingHref)
     }})
     
     
@@ -497,7 +498,7 @@ Deno.test({
         using stubFetch = stub(globalThis, "fetch", async (url) => {
             if (url.toString() == "https://test.com/") {
                 return Promise.resolve( new Response(
-                    "<html> <a>next</a> </html>", { status: 200 }) )
+                    "<html> <a href=/2>next</a> </html>", { status: 200 }) )
 
             } else if (url.toString() == "https://test.com/img/") {
                 const buffer = (await Deno.readFile("test/test.jpg")).buffer
@@ -586,7 +587,7 @@ Deno.test({
                         const headers = init?.headers as Record<string, string>
                         if (headers && headers["auth"] == "token") {
                             return Promise.resolve(new Response(
-                                "<html><img src='https://test.com/img1'></html>", { status: 200 }) )
+                                "<html><img src='https://test.com/img1'><a href=''></a></html>", { status: 200 }) )
 
                         } else {
                             
@@ -624,7 +625,7 @@ Deno.test({
             //result: fail without header
             await downloadWebcomic(mockPdf, new URL("https://test.com/1"), "img", "a", 10000)
 
-            assertSpyCallArgs(stubError, 0, [constructHttpErrorMsg(403, messages.errorFetchAuthlike)])
+            assertSpyCallArgs(stubError, 0, [constructHttpErrorMsg(403, messages.errorFetchAuthlike, "https://test.com/1")])
             assertSpyCalls(stubAddPage, 0)
             assertSpyCalls(stubImage, 0)
         }
@@ -757,5 +758,40 @@ Deno.test({
     fn: async () => {
         const buffer = await Deno.readFile("test/garbage.txt")
         assertThrows(() => { withMetadata(buffer.buffer) })
+    }
+})
+
+
+Deno.test({
+    name: "downloadWebcomic throw when nextLinkQuerySelector doesn't find anything",
+    fn: async () => {
+        using stubFetch = stub(globalThis, "fetch", fetchMock(fetchFullServerMockObject))
+
+
+        await assertRejects(
+            async () => {
+                await downloadWebcomic(mockPdf, new URL("https://test.com/1"), "img", "a#awpeijawpofeijwae", 10000)
+        }, messages.errorCannotFindNextPageButtonOnFirstPage
+        )
+    }
+})
+
+Deno.test({
+    name: "downloadWebcomic throw when nextLinkQuerySelector DOES find something, but that something misses a href",
+    fn: async () => {
+        using stubFetch = stub(globalThis, "fetch", fetchMock(
+            {...fetchFullServerMockObject,
+                "https://test.com/1": () => {  
+                    return Promise.resolve(new Response(
+                        "<html><img src='https://test.com/img1'><a id='next'>next</a></html>", { status: 200 }) ) },
+            }
+        ))
+
+
+        await assertRejects(
+            async () => {
+                await downloadWebcomic(mockPdf, new URL("https://test.com/1"), "img", "a", 10000)
+        }, messages.errorNextPageButtonLacksHref
+        )
     }
 })
